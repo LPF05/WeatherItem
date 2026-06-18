@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>全国天气气候分析系统</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Microsoft YaHei','PingFang SC',sans-serif; background: #f0f2f5; color: #333; }
+        .header { background: linear-gradient(135deg,#1a73e8,#0d47a1); color: white; padding: 20px 40px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+        .header h1 { font-size: 28px; margin-bottom: 8px; }
+        .header p { font-size: 14px; opacity: 0.85; }
+        .container { max-width: 1400px; margin: 20px auto; padding: 0 20px; }
+        .controls { background: white; border-radius: 8px; padding: 16px 24px; margin-bottom: 20px; display: flex; align-items: center; gap: 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); flex-wrap: wrap; }
+        .controls label { font-weight: 600; font-size: 14px; }
+        .controls select { padding: 8px 16px; border: 1px solid #d9d9d9; border-radius: 6px; font-size: 14px; min-width: 120px; outline: none; transition: border-color 0.2s; }
+        .controls select:focus { border-color: #1a73e8; box-shadow: 0 0 0 2px rgba(26,115,232,0.15); }
+        .stats-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; margin-bottom: 20px; }
+        .stat-card { background: white; border-radius: 8px; padding: 20px; text-align: center; box-shadow: 0 1px 4px rgba(0,0,0,0.08); transition: transform 0.2s,box-shadow 0.2s; }
+        .stat-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
+        .stat-card .value { font-size: 32px; font-weight: 700; color: #1a73e8; }
+        .stat-card .label { font-size: 13px; color: #666; margin-top: 4px; }
+        .section-title { font-size: 18px; font-weight: 700; color: #1a73e8; margin: 24px 0 12px; padding-left: 12px; border-left: 4px solid #1a73e8; }
+        .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+        .chart-box { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+        .chart-box.full { grid-column: 1 / -1; }
+        .chart-box h3 { font-size: 16px; margin-bottom: 12px; color: #333; border-left: 3px solid #1a73e8; padding-left: 10px; }
+        .chart-container { width: 100%; height: 400px; }
+        .chart-container.tall { height: 500px; }
+        .loading-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255,255,255,0.85); display: flex; align-items: center; justify-content: center; z-index: 9999; transition: opacity 0.3s; }
+        .loading-overlay.hidden { opacity: 0; pointer-events: none; }
+        .loading-spinner { text-align: center; }
+        .loading-spinner::before { content: ''; display: inline-block; width: 40px; height: 40px; border: 4px solid #e0e0e0; border-top-color: #1a73e8; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        .loading-spinner p { margin-top: 12px; color: #666; font-size: 14px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @media (max-width: 900px) { .chart-grid { grid-template-columns: 1fr; } .stats-row { grid-template-columns: repeat(2,1fr); } }
+    </style>
+</head>
+<body>
+    <div class="loading-overlay" id="loadingOverlay"><div class="loading-spinner"><p>数据加载中...</p></div></div>
+    <div class="header">
+        <h1>全国天气气候分析系统</h1>
+        <p>基于HDFS+Spark的大数据气象分析平台 | 多城市历史气象数据综合分析</p>
+    </div>
+    <div class="container">
+        <div class="controls">
+            <label>选择城市:</label>
+            <select id="citySelect"><option value="">加载中...</option></select>
+            <label>选择年份:</label>
+            <select id="yearSelect"><option value="">加载中...</option></select>
+        </div>
+        <div class="stats-row">
+            <div class="stat-card"><div class="value" id="statCities">-</div><div class="label">监测城市数</div></div>
+            <div class="stat-card"><div class="value" id="statYears">-</div><div class="label">数据年份跨度</div></div>
+            <div class="stat-card"><div class="value" id="statMaxTemp">-</div><div class="label">最高温度记录</div></div>
+            <div class="stat-card"><div class="value" id="statMinTemp">-</div><div class="label">最低温度记录</div></div>
+        </div>
+
+        <div class="section-title">年度气象数据</div>
+        <div class="chart-grid">
+            <div class="chart-box full">
+                <h3 id="titleTempTrend">各城市年平均温度</h3>
+                <div id="chartTempTrend" class="chart-container tall"></div>
+            </div>
+            <div class="chart-box">
+                <h3 id="titlePrecipitation">月降水量分布</h3>
+                <div id="chartPrecipitation" class="chart-container"></div>
+            </div>
+            <div class="chart-box">
+                <h3>各城市温度极值对比</h3>
+                <div id="chartTempExtremes" class="chart-container"></div>
+            </div>
+            <div class="chart-box">
+                <h3 id="titleSeasonal">季节温度与降水对比</h3>
+                <div id="chartSeasonal" class="chart-container"></div>
+            </div>
+            <div class="chart-box">
+                <h3>年均极端天气天数统计</h3>
+                <div id="chartExtreme" class="chart-container"></div>
+            </div>
+            <div class="chart-box">
+                <h3 id="titleHumidity">各城市年平均湿度</h3>
+                <div id="chartHumidity" class="chart-container"></div>
+            </div>
+        </div>
+
+        <div class="section-title">5年长期气候趋势</div>
+        <div class="chart-grid">
+            <div class="chart-box full">
+                <h3>各城市6年温度变化趋势</h3>
+                <div id="chartTempTrendLong" class="chart-container tall"></div>
+            </div>
+            <div class="chart-box full">
+                <h3>各城市6年降水量变化趋势</h3>
+                <div id="chartPrecipTrendLong" class="chart-container tall"></div>
+            </div>
+            <div class="chart-box">
+                <h3 id="titleExtremeTrend">6年极端天气天数趋势</h3>
+                <div id="chartExtremeTrend" class="chart-container"></div>
+            </div>
+            <div class="chart-box">
+                <h3>各城市风速统计</h3>
+                <div id="chartWind" class="chart-container"></div>
+            </div>
+        </div>
+    </div>
+
+<script>
+let allCities=[], allYears=[], avgTempData=[], extremesData=[], monthlyPrecipData=[];
+let seasonalData=[], extremeWeatherData=[], humidityData=[], windData=[];
+let tempTrendData=[], precipTrendData=[], annualExtTrendData=[];
+
+const COLORS = ['#1a73e8','#e8710a','#0d9d58','#c62828','#6a1b9a','#00838f','#ef6c00','#4e342e','#1565c0','#ad1457'];
+
+const chartInstances = {};
+function getChart(domId) {
+    const dom = document.getElementById(domId);
+    if (!chartInstances[domId]) chartInstances[domId] = echarts.init(dom);
+    return chartInstances[domId];
+}
+let resizeInstalled = false;
+function installResize() { if (resizeInstalled) return; resizeInstalled = true; window.addEventListener('resize', () => Object.values(chartInstances).forEach(c => c.resize())); }
+
+async function init() {
+    try {
+        const d = await (await fetch('/api/all')).json();
+        allCities=d.cities; allYears=d.years; avgTempData=d.city_avg_temp;
+        extremesData=d.city_temp_extremes; monthlyPrecipData=d.monthly_precipitation;
+        seasonalData=d.seasonal_comparison; extremeWeatherData=d.extreme_weather;
+        humidityData=d.city_humidity; windData=d.wind_stats;
+        tempTrendData=d.temp_trend; precipTrendData=d.precipitation_trend;
+        annualExtTrendData=d.annual_extreme_trend;
+
+        const citySel = document.getElementById('citySelect');
+        citySel.innerHTML = '<option value="all">全部城市</option>' + allCities.map(c=>`<option value="${c}">${c}</option>`).join('');
+        // 默认选中太原
+        citySel.value = allCities.includes('太原') ? '太原' : 'all';
+
+        const yearSel = document.getElementById('yearSelect');
+        yearSel.innerHTML = allYears.map(y=>`<option value="${y}">${y}年</option>`).join('');
+        // 默认选最新年份（2025）
+        yearSel.value = allYears[allYears.length - 1];
+
+        citySel.addEventListener('change', onCityChange);
+        yearSel.addEventListener('change', onYearChange);
+        installResize();
+        updateStats();
+        renderAllCharts();
+    } catch(e) {
+        console.error('初始化失败:', e);
+        document.querySelector('.loading-spinner p').textContent = '数据加载失败，请刷新重试';
+        return;
+    }
+    document.getElementById('loadingOverlay').classList.add('hidden');
+}
+
+function onCityChange() {
+    const city = document.getElementById('citySelect').value;
+    const year = parseInt(document.getElementById('yearSelect').value);
+    renderTempTrend(city, year);
+    renderPrecipitation(city, year);
+    renderSeasonal(city);
+    renderExtremeTrend(city);
+}
+function onYearChange() {
+    const city = document.getElementById('citySelect').value;
+    const year = parseInt(document.getElementById('yearSelect').value);
+    renderTempTrend(city, year);
+    renderPrecipitation(city, year);
+    renderHumidity(year);
+}
+
+function renderAllCharts() {
+    const city = document.getElementById('citySelect').value;
+    const year = parseInt(document.getElementById('yearSelect').value);
+    renderTempTrend(city, year);
+    renderPrecipitation(city, year);
+    renderTempExtremes();
+    renderSeasonal(city);
+    renderExtremeWeather();
+    renderHumidity(year);
+    renderTempTrendLong();
+    renderPrecipTrendLong();
+    renderExtremeTrend(city);
+    renderWind();
+}
+
+function updateStats() {
+    document.getElementById('statCities').textContent = allCities.length;
+    document.getElementById('statYears').textContent = allYears.length + '年';
+    if (extremesData.length) {
+        document.getElementById('statMaxTemp').textContent = Math.max(...extremesData.map(d=>d.max_temp)) + '°C';
+        document.getElementById('statMinTemp').textContent = Math.min(...extremesData.map(d=>d.min_temp)) + '°C';
+    }
+}
+
+// 1. 温度趋势
+function renderTempTrend(city, year) {
+    const chart = getChart('chartTempTrend');
+    if (city === 'all') {
+        const data = avgTempData.filter(d=>d.year===year);
+        document.getElementById('titleTempTrend').textContent = `${year}年各城市年平均温度`;
+        chart.setOption({
+            tooltip:{trigger:'axis'}, grid:{left:'3%',right:'4%',bottom:'3%',containLabel:true},
+            xAxis:{type:'category',data:data.map(d=>d.city),axisLabel:{rotate:30}},
+            yAxis:{type:'value',name:'温度(°C)'},
+            series:[{name:'年平均温度',type:'bar',data:data.map(d=>d.avg_temp),
+                itemStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:'#1a73e8'},{offset:1,color:'#64b5f6'}])},
+                label:{show:true,position:'top',formatter:'{c}°C',fontSize:11},animationDuration:600}]
+        }, true);
+    } else {
+        const data = avgTempData.filter(d=>d.city===city);
+        document.getElementById('titleTempTrend').textContent = `${city}年平均温度趋势`;
+        chart.setOption({
+            tooltip:{trigger:'axis'}, grid:{left:'3%',right:'4%',bottom:'3%',containLabel:true},
+            xAxis:{type:'category',data:data.map(d=>d.year+'年')},
+            yAxis:{type:'value',name:'温度(°C)'},
+            series:[{name:'年平均温度',type:'line',data:data.map(d=>d.avg_temp),smooth:true,lineStyle:{width:3},
+                areaStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:'rgba(26,115,232,0.3)'},{offset:1,color:'rgba(26,115,232,0.05)'}])},
+                itemStyle:{color:'#1a73e8'},label:{show:true,position:'top',formatter:'{c}°C'},animationDuration:600}]
+        }, true);
+    }
+}
+
+// 2. 降水量
+function renderPrecipitation(city, year) {
+    const chart = getChart('chartPrecipitation');
+    const c = city==='all' ? '太原' : city;
+    const data = monthlyPrecipData.filter(d=>d.city===c && d.year===year);
+    const months = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+    document.getElementById('titlePrecipitation').textContent = `${c} ${year}年月降水量`;
+    chart.setOption({
+        tooltip:{trigger:'axis'}, grid:{left:'3%',right:'4%',bottom:'3%',containLabel:true},
+        xAxis:{type:'category',data:months}, yAxis:{type:'value',name:'降水量(mm)'},
+        series:[{name:'降水量',type:'bar',data:data.map(d=>d.precipitation),
+            itemStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:'#0d9d58'},{offset:1,color:'#81c784'}])},
+            label:{show:true,position:'top',formatter:'{c}mm',fontSize:10},animationDuration:600}]
+    }, true);
+}
+
+// 3. 温度极值
+function renderTempExtremes() {
+    const chart = getChart('chartTempExtremes');
+    chart.setOption({
+        tooltip:{trigger:'axis'}, legend:{data:['最高温','最低温']},
+        grid:{left:'3%',right:'4%',bottom:'3%',containLabel:true},
+        xAxis:{type:'category',data:extremesData.map(d=>d.city),axisLabel:{rotate:30}},
+        yAxis:{type:'value',name:'温度(°C)'},
+        series:[
+            {name:'最高温',type:'bar',data:extremesData.map(d=>d.max_temp),itemStyle:{color:'#e8710a'},label:{show:true,position:'top',formatter:'{c}°C',fontSize:9}},
+            {name:'最低温',type:'bar',data:extremesData.map(d=>d.min_temp),itemStyle:{color:'#1a73e8'},label:{show:true,position:'bottom',formatter:'{c}°C',fontSize:9}}
+        ]
+    }, true);
+}
+
+// 4. 季节对比
+function renderSeasonal(city) {
+    const chart = getChart('chartSeasonal');
+    const c = city==='all' ? '太原' : city;
+    const data = seasonalData.filter(d=>d.city===c);
+    const latestYear = Math.max(...data.map(d=>d.year));
+    const yearData = data.filter(d=>d.year===latestYear);
+    const seasons = ['春','夏','秋','冬'];
+    document.getElementById('titleSeasonal').textContent = `${c} ${latestYear}年季节对比`;
+    chart.setOption({
+        tooltip:{trigger:'axis'}, legend:{data:['平均温度','总降水量']},
+        grid:{left:'3%',right:'4%',bottom:'3%',containLabel:true},
+        xAxis:{type:'category',data:seasons},
+        yAxis:[{type:'value',name:'温度(°C)',position:'left'},{type:'value',name:'降水量(mm)',position:'right'}],
+        series:[
+            {name:'平均温度',type:'line',yAxisIndex:0,data:seasons.map(s=>{const d=yearData.find(x=>x.season===s);return d?d.avg_temp:0}),smooth:true,lineStyle:{width:3},itemStyle:{color:'#e8710a'}},
+            {name:'总降水量',type:'bar',yAxisIndex:1,data:seasons.map(s=>{const d=yearData.find(x=>x.season===s);return d?d.total_precipitation:0}),itemStyle:{color:'#64b5f6'}}
+        ]
+    }, true);
+}
+
+// 5. 极端天气（年均天数）
+function renderExtremeWeather() {
+    const chart = getChart('chartExtreme');
+    const cities = extremeWeatherData.map(d=>d.city);
+    chart.setOption({
+        tooltip:{trigger:'axis'}, legend:{data:['年均高温天数','年均低温天数','年均暴雨天数']},
+        grid:{left:'3%',right:'4%',bottom:'3%',containLabel:true},
+        xAxis:{type:'category',data:cities,axisLabel:{rotate:30}},
+        yAxis:{type:'value',name:'天数/年'},
+        series:[
+            {name:'年均高温天数',type:'bar',data:extremeWeatherData.map(d=>d.avg_extreme_heat_days),itemStyle:{color:'#c62828'}},
+            {name:'年均低温天数',type:'bar',data:extremeWeatherData.map(d=>d.avg_extreme_cold_days),itemStyle:{color:'#1a73e8'}},
+            {name:'年均暴雨天数',type:'bar',data:extremeWeatherData.map(d=>d.avg_heavy_rain_days),itemStyle:{color:'#0d9d58'}}
+        ]
+    }, true);
+}
+
+// 6. 湿度
+function renderHumidity(year) {
+    const chart = getChart('chartHumidity');
+    const data = humidityData.filter(d=>d.year===year);
+    document.getElementById('titleHumidity').textContent = `${year}年各城市年平均湿度`;
+    chart.setOption({
+        tooltip:{trigger:'axis'}, grid:{left:'3%',right:'4%',bottom:'3%',containLabel:true},
+        xAxis:{type:'category',data:data.map(d=>d.city),axisLabel:{rotate:30}},
+        yAxis:{type:'value',name:'湿度(%)',min:30,max:90},
+        series:[{name:'年平均湿度',type:'bar',data:data.map(d=>d.avg_humidity),
+            itemStyle:{color:new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:'#6a1b9a'},{offset:1,color:'#ba68c8'}])},
+            label:{show:true,position:'top',formatter:'{c}%',fontSize:10}}]
+    }, true);
+}
+
+// 7. 6年温度趋势（多城市折线）
+function renderTempTrendLong() {
+    const chart = getChart('chartTempTrendLong');
+    const years = allYears;
+    const series = tempTrendData.map((cityData, idx) => ({
+        name: cityData.city, type: 'line',
+        data: cityData.trend.map(t => t.avg_temp),
+        smooth: true, lineStyle: {width: 2},
+        itemStyle: {color: COLORS[idx % COLORS.length]},
+        label: {show: false}
+    }));
+    chart.setOption({
+        tooltip:{trigger:'axis'}, legend:{type:'scroll',bottom:0},
+        grid:{left:'3%',right:'4%',bottom:'12%',containLabel:true},
+        xAxis:{type:'category',data:years.map(y=>y+'年')},
+        yAxis:{type:'value',name:'温度(°C)'},
+        series: series
+    }, true);
+}
+
+// 8. 6年降水趋势（多城市折线）
+function renderPrecipTrendLong() {
+    const chart = getChart('chartPrecipTrendLong');
+    const years = allYears;
+    const series = precipTrendData.map((cityData, idx) => ({
+        name: cityData.city, type: 'line',
+        data: cityData.trend.map(t => t.total_precipitation),
+        smooth: true, lineStyle: {width: 2},
+        itemStyle: {color: COLORS[idx % COLORS.length]}
+    }));
+    chart.setOption({
+        tooltip:{trigger:'axis'}, legend:{type:'scroll',bottom:0},
+        grid:{left:'3%',right:'4%',bottom:'12%',containLabel:true},
+        xAxis:{type:'category',data:years.map(y=>y+'年')},
+        yAxis:{type:'value',name:'降水量(mm)'},
+        series: series
+    }, true);
+}
+
+// 9. 6年极端天气趋势
+function renderExtremeTrend(city) {
+    const chart = getChart('chartExtremeTrend');
+    const c = city==='all' ? '太原' : city;
+    const cityData = annualExtTrendData.find(d=>d.city===c);
+    document.getElementById('titleExtremeTrend').textContent = `${c} 6年极端天气天数趋势`;
+    if (!cityData) return;
+    const years = cityData.trend.map(t=>t.year+'年');
+    chart.setOption({
+        tooltip:{trigger:'axis'}, legend:{data:['高温天数','低温天数','暴雨天数']},
+        grid:{left:'3%',right:'4%',bottom:'3%',containLabel:true},
+        xAxis:{type:'category',data:years},
+        yAxis:{type:'value',name:'天数'},
+        series:[
+            {name:'高温天数',type:'line',data:cityData.trend.map(t=>t.extreme_heat_days),smooth:true,itemStyle:{color:'#c62828'},lineStyle:{width:2}},
+            {name:'低温天数',type:'line',data:cityData.trend.map(t=>t.extreme_cold_days),smooth:true,itemStyle:{color:'#1a73e8'},lineStyle:{width:2}},
+            {name:'暴雨天数',type:'line',data:cityData.trend.map(t=>t.heavy_rain_days),smooth:true,itemStyle:{color:'#0d9d58'},lineStyle:{width:2}}
+        ]
+    }, true);
+}
+
+// 10. 风速
+function renderWind() {
+    const chart = getChart('chartWind');
+    chart.setOption({
+        tooltip:{trigger:'axis'}, legend:{data:['平均风速','最大风速','最小风速']},
+        grid:{left:'3%',right:'4%',bottom:'3%',containLabel:true},
+        xAxis:{type:'category',data:windData.map(d=>d.city),axisLabel:{rotate:30}},
+        yAxis:{type:'value',name:'风速(m/s)'},
+        series:[
+            {name:'平均风速',type:'line',data:windData.map(d=>d.avg_wind_speed),smooth:true,itemStyle:{color:'#1a73e8'},lineStyle:{width:2}},
+            {name:'最大风速',type:'bar',data:windData.map(d=>d.max_wind_speed),itemStyle:{color:'#e8710a',opacity:0.6}},
+            {name:'最小风速',type:'bar',data:windData.map(d=>d.min_wind_speed),itemStyle:{color:'#0d9d58',opacity:0.6}}
+        ]
+    }, true);
+}
+
+init();
+</script>
+</body>
+</html>

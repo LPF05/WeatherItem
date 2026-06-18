@@ -1,0 +1,50 @@
+# ============ 大数据组件安装包（数百MB，不应提交） ============
+hadoop-3.3.6/
+hadoop-3.3.6.tar.gz
+spark-3.3.4-bin-hadoop3/
+spark-3.3.4-bin-hadoop3.tgz
+cloudpickle/
+
+# ============ Python ============
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+venv/
+.venv/
+
+# ============ 生成的数据文件（运行后生成） ============
+data/weather_raw.csv
+data/weather_clean.csv
+data/weather_analysis.db
+data/analysis_results/
+
+# ============ 打包文件 ============
+weather-analysis.tar.gz
+*.tar.gz
+*.tgz
+*.zip
+
+# ============ IDE ============
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ============ 操作系统 ============
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ============ Hadoop运行时文件 ============
+hadoop-3.3.6/tmp/
+hadoop-3.3.6/logs/
+
+# ============ 日志 ============
+*.log
+logs/
