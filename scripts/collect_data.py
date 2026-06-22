@@ -3,16 +3,17 @@
 通过调用Open-Meteo历史天气API采集多城市真实气象数据，并进行数据清洗
 API文档: https://open-meteo.com/en/docs/historical-weather-api
 """
+# pylint: disable=wrong-import-position
 import csv
 import os
+import sys
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import requests
 
-import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import RAW_DATA_PATH, CLEAN_DATA_PATH, FIELDNAMES
+from config import RAW_DATA_PATH, CLEAN_DATA_PATH, FIELDNAMES  # noqa: E402
 
 # 中国代表性城市及经纬度（覆盖不同气候带：温带、亚热带、热带、高原、干旱）
 CITIES = {
@@ -25,7 +26,7 @@ CITIES = {
     "哈尔滨": {"lat": 45.75, "lon": 126.65},  # 温带季风气候（寒温带）
     "昆明": {"lat": 25.04, "lon": 102.68},    # 亚热带高原季风气候
     "拉萨": {"lat": 29.65, "lon": 91.17},     # 高原山地气候
-    "乌鲁木齐": {"lat": 43.83, "lon": 87.60}, # 温带大陆性干旱气候
+    "乌鲁木齐": {"lat": 43.83, "lon": 87.60},  # 温带大陆性干旱气候
 }
 
 # Open-Meteo API请求的气象要素
@@ -35,7 +36,7 @@ DAILY_PARAMS = [
     "temperature_2m_mean",      # 平均温度(°C)
     "precipitation_sum",        # 降水量(mm)
     "windspeed_10m_max",        # 最大风速(km/h)
-    "relative_humidity_2m_mean",# 平均相对湿度(%)
+    "relative_humidity_2m_mean",  # 平均相对湿度(%)
     "surface_pressure_mean",    # 平均地表气压(hPa)
     "weathercode",              # 天气代码(WMO标准)
 ]
@@ -72,14 +73,14 @@ def _get_weather_desc(code):
     return WMO_WEATHER_MAP.get(code, "未知")
 
 
-def _fetch_city_data(city_name, lat, lon, start_date, end_date, max_retries=3):
+def _fetch_city_data(city_name, lat, lon, start, end, max_retries=3):  # noqa: E501  pylint: disable=too-many-arguments,too-many-positional-arguments
     """调用Open-Meteo API获取单个城市的历史气象数据（含重试）"""
     url = "https://archive-api.open-meteo.com/v1/archive"
     params = {
         "latitude": lat,
         "longitude": lon,
-        "start_date": start_date,
-        "end_date": end_date,
+        "start_date": start,
+        "end_date": end,
         "daily": ",".join(DAILY_PARAMS),
         "timezone": "Asia/Shanghai",
     }
@@ -103,14 +104,14 @@ def _fetch_city_data(city_name, lat, lon, start_date, end_date, max_retries=3):
     return None
 
 
-def fetch_weather_data(start_date, end_date, output_path):
+def fetch_weather_data(start, end, output_path):  # pylint: disable=too-many-locals,too-many-statements
     """
     通过Open-Meteo API采集多城市历史气象数据
     API免费、无需Key，支持1940年至今的全球历史数据
     支持增量采集：已有数据的城市会跳过
     """
-    start_str = start_date.strftime("%Y-%m-%d")
-    end_str = end_date.strftime("%Y-%m-%d")
+    start_str = start.strftime("%Y-%m-%d")
+    end_str = end.strftime("%Y-%m-%d")
     all_records = []
     success_cities = 0
 

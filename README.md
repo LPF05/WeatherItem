@@ -141,6 +141,7 @@ sudo mysql -u root < sql/init.sql
 
 ```bash
 cd weatherItem
+start-dfs.sh
 bash run.sh
 ```
 

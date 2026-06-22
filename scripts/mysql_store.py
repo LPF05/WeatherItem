@@ -3,13 +3,14 @@
 将Spark分析结果存储至MySQL/SQLite数据库
 优化：统一建表逻辑（消除SQL重复）、使用配置模块
 """
+# pylint: disable=wrong-import-position
 import json
 import os
+import sqlite3
 import sys
 
-import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import MYSQL_CONFIG, SQLITE_DB_PATH, RESULTS_DIR, TABLE_SCHEMAS
+from config import MYSQL_CONFIG, SQLITE_DB_PATH, RESULTS_DIR, TABLE_SCHEMAS  # noqa: E402
 
 try:
     import pymysql
@@ -25,11 +26,10 @@ def get_db_connection(use_mysql=True):
             conn = pymysql.connect(**MYSQL_CONFIG)
             print("MySQL连接成功")
             return conn, "mysql"
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-exception-caught
             print(f"MySQL连接失败: {e}")
             print("切换至SQLite...")
 
-    import sqlite3
     conn = sqlite3.connect(SQLITE_DB_PATH)
     print("SQLite连接成功")
     return conn, "sqlite"
@@ -56,8 +56,7 @@ def _build_create_table_sql(table_name, schema, db_type):
     if db_type == "mysql":
         col_defs.append(f"UNIQUE KEY {uk_name} ({uk_cols})")
         return f"CREATE TABLE IF NOT EXISTS {table_name} ({', '.join(col_defs)}) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
-    else:
-        return f"CREATE TABLE IF NOT EXISTS {table_name} ({', '.join(col_defs)}, UNIQUE({uk_cols}))"
+    return f"CREATE TABLE IF NOT EXISTS {table_name} ({', '.join(col_defs)}, UNIQUE({uk_cols}))"
 
 
 def create_tables(conn, db_type):

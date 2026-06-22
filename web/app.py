@@ -3,32 +3,32 @@
 提供API接口供前端ECharts调用
 优化：添加数据缓存、统一错误处理、使用配置模块
 """
+# pylint: disable=wrong-import-position
 import json
 import os
+import sys
 import time
-from functools import lru_cache
 
 from flask import Flask, jsonify, render_template
 
-import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import RESULTS_DIR, SQLITE_DB_PATH
+from config import RESULTS_DIR  # noqa: E402
 
 app = Flask(__name__)
 
 # ============ 数据缓存层 ============
 # 启动时一次性加载所有数据到内存，避免每次请求读磁盘
 _data_cache = {}
-_cache_timestamp = 0
+_CACHE_TIMESTAMP = 0
 CACHE_TTL = 300  # 缓存有效期5分钟，支持数据更新后自动刷新
 
 
 def _load_all_data():
     """一次性加载所有分析结果到内存缓存"""
-    global _data_cache, _cache_timestamp
+    global _CACHE_TIMESTAMP  # pylint: disable=global-statement
 
     now = time.time()
-    if _data_cache and (now - _cache_timestamp) < CACHE_TTL:
+    if _data_cache and (now - _CACHE_TIMESTAMP) < CACHE_TTL:
         return _data_cache
 
     json_files = [
@@ -45,7 +45,7 @@ def _load_all_data():
         else:
             _data_cache[name] = []
 
-    _cache_timestamp = now
+    _CACHE_TIMESTAMP = now
     return _data_cache
 
 
@@ -73,6 +73,7 @@ def _get_years():
 
 @app.route("/")
 def index():
+    """渲染主页面"""
     return render_template("index.html")
 
 

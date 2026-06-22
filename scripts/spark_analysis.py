@@ -3,14 +3,15 @@
 基于Spark RDD编程模型完成气象数据统计分析
 包含：年均统计、5年长期趋势分析
 """
+# pylint: disable=wrong-import-position
+import json
 import os
 import sys
-import json
 
 from pyspark.sql import SparkSession
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from config import JAVA_HOME, HADOOP_HOME, HDFS_DATA_PATH, CLEAN_DATA_PATH, RESULTS_DIR
+from config import JAVA_HOME, HADOOP_HOME, HDFS_DATA_PATH, CLEAN_DATA_PATH, RESULTS_DIR  # noqa: E402
 
 
 def create_spark_session():
@@ -38,7 +39,7 @@ def load_data(spark, use_hdfs=True):
         try:
             rdd = spark.sparkContext.textFile(HDFS_DATA_PATH)
             print("从HDFS加载数据成功")
-        except Exception:
+        except Exception:  # pylint: disable=broad-exception-caught
             print("HDFS加载失败，尝试从本地加载...")
             rdd = spark.sparkContext.textFile(f"file://{CLEAN_DATA_PATH}")
             print("从本地加载数据成功")
@@ -121,14 +122,18 @@ def analysis_monthly_precipitation(data_rdd):
 def analysis_seasonal_comparison(data_rdd):
     """季节对比分析（春3-5月、夏6-8月、秋9-11月、冬12-2月）"""
     def get_season(month):
-        if month <= 2: return "冬"
-        elif month <= 5: return "春"
-        elif month <= 8: return "夏"
-        elif month <= 11: return "秋"
-        else: return "冬"
+        if month <= 2:
+            return "冬"
+        if month <= 5:
+            return "春"
+        if month <= 8:
+            return "夏"
+        if month <= 11:
+            return "秋"
+        return "冬"
 
     result = data_rdd.map(lambda x: ((x["city"], x["year"], get_season(x["month"])),
-                                      (x["temp_avg"], x["precipitation"], 1))) \
+                                     (x["temp_avg"], x["precipitation"], 1))) \
         .reduceByKey(lambda a, b: (a[0] + b[0], a[1] + b[1], a[2] + b[2])) \
         .map(lambda x: {
             "city": x[0][0], "year": x[0][1], "season": x[0][2],
@@ -152,7 +157,7 @@ def analysis_extreme_weather(data_rdd):
 
     # 按城市分组求年均
     city_years = {}
-    for ((city, year), (heat, cold, rain)) in yearly:
+    for ((city, _year), (heat, cold, rain)) in yearly:
         if city not in city_years:
             city_years[city] = {"heat": [], "cold": [], "rain": []}
         city_years[city]["heat"].append(heat)
@@ -369,5 +374,5 @@ def run_all_analyses(use_hdfs=True):
 
 
 if __name__ == "__main__":
-    use_hdfs = "--local" not in sys.argv
-    run_all_analyses(use_hdfs=use_hdfs)
+    hdfs_mode = "--local" not in sys.argv
+    run_all_analyses(use_hdfs=hdfs_mode)

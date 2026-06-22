@@ -32,9 +32,10 @@ echo ""
 echo "[3/5] 安装Hadoop..."
 HADOOP_DIR="$HOME/vibe/weatherItem/hadoop-3.3.6"
 if [ ! -d "$HADOOP_DIR" ]; then
+    mkdir -p "$(dirname "$HADOOP_DIR")"
     cd /tmp
     wget -q https://archive.apache.org/dist/hadoop/common/hadoop-3.3.6/hadoop-3.3.6.tar.gz
-    tar -xzf hadoop-3.3.6.tar.gz -C "$HOME/"
+    tar -xzf hadoop-3.3.6.tar.gz -C "$HOME/vibe/"
     rm -f hadoop-3.3.6.tar.gz
     echo "Hadoop已安装至 $HADOOP_DIR"
 else
@@ -48,6 +49,25 @@ HADOOP_ETC="$HADOOP_DIR/etc/hadoop"
 # hadoop-env.sh
 sed -i "s|export JAVA_HOME=.*|export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64|" "$HADOOP_ETC/hadoop-env.sh"
 
+# hdfs-site.xml
+cat > "$HADOOP_ETC/hdfs-site.xml" << 'XMLEOF'
+<?xml version="1.0"?>
+<configuration>
+  <property>
+    <name>dfs.replication</name>
+    <value>1</value>
+  </property>
+  <property>
+    <name>dfs.namenode.name.dir</name>
+    <value>file://$HADOOP_DIR/tmp/dfs/name</value>
+  </property>
+  <property>
+    <name>dfs.datanode.data.dir</name>
+    <value>file://$HADOOP_DIR/tmp/dfs/data</value>
+  </property>
+</configuration>
+XMLEOF
+
 # core-site.xml
 cat > "$HADOOP_ETC/core-site.xml" << 'XMLEOF'
 <?xml version="1.0"?>
@@ -56,16 +76,9 @@ cat > "$HADOOP_ETC/core-site.xml" << 'XMLEOF'
     <name>fs.defaultFS</name>
     <value>hdfs://localhost:9000</value>
   </property>
-</configuration>
-XMLEOF
-
-# hdfs-site.xml
-cat > "$HADOOP_ETC/hdfs-site.xml" << 'XMLEOF'
-<?xml version="1.0"?>
-<configuration>
   <property>
-    <name>dfs.replication</name>
-    <value>1</value>
+    <name>hadoop.tmp.dir</name>
+    <value>$HADOOP_DIR/tmp</value>
   </property>
 </configuration>
 XMLEOF
@@ -117,6 +130,24 @@ echo ""
 echo "[4/5] 安装Python依赖..."
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 pip3 install -r "$SCRIPT_DIR/requirements.txt"
+
+# 复制cloudpickle（Spark依赖）
+CLOUDPICKLE_DIR="$SCRIPT_DIR/cloudpickle"
+if [ ! -d "$CLOUDPICKLE_DIR" ]; then
+    echo "复制cloudpickle依赖..."
+    mkdir -p "$CLOUDPICKLE_DIR"
+    python3 -c "
+import cloudpickle
+import os, shutil
+src = os.path.dirname(cloudpickle.__file__)
+dst = '$CLOUDPICKLE_DIR'
+for f in os.listdir(src):
+    s = os.path.join(src, f)
+    d = os.path.join(dst, f)
+    if os.path.isfile(s): shutil.copy2(s, d)
+    elif not os.path.exists(d): shutil.copytree(s, d)
+" 2>/dev/null || echo "cloudpickle已存在或跳过"
+fi
 
 # 5. 安装MySQL（可选）
 echo ""

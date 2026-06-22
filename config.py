@@ -18,8 +18,8 @@ SQLITE_DB_PATH = os.path.join(DATA_DIR, "weather_analysis.db")
 
 # ============ 环境路径 ============
 JAVA_HOME = "/usr/lib/jvm/java-8-openjdk-amd64"
-HADOOP_HOME = "/home/lpf05/vibe/weatherItem/hadoop-3.3.6"
-SPARK_HOME = "/home/lpf05/vibe/weatherItem/spark-3.3.4-bin-hadoop3"
+HADOOP_HOME = os.path.join(PROJECT_DIR, "hadoop-3.3.6")
+SPARK_HOME = os.path.join(PROJECT_DIR, "spark-3.3.4-bin-hadoop3")
 
 # ============ HDFS配置 ============
 HDFS_NAMENODE = "hdfs://localhost:9000"
